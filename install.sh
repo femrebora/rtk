@@ -83,6 +83,40 @@ get_target() {
     esac
 }
 
+# Verify binary checksum against published checksums.txt
+verify_checksum() {
+    CHECKSUMS_URL="https://github.com/${REPO}/releases/download/${VERSION}/checksums.txt"
+    CHECKSUMS_FILE="${TEMP_DIR}/checksums.txt"
+    ARCHIVE_NAME="${BINARY_NAME}-${TARGET}.tar.gz"
+
+    info "Downloading checksums..."
+    if ! curl -fsSL "$CHECKSUMS_URL" -o "$CHECKSUMS_FILE"; then
+        error "Failed to download checksums"
+    fi
+
+    EXPECTED=$(awk -v file="$ARCHIVE_NAME" '$2 == file || $2 == "./" file {print $1; exit}' "$CHECKSUMS_FILE")
+
+    if [ -z "$EXPECTED" ]; then
+        error "Checksum for $ARCHIVE_NAME not found in checksums.txt"
+    fi
+
+    info "Verifying checksum..."
+
+    if command -v sha256sum >/dev/null 2>&1; then
+        ACTUAL=$(sha256sum "$ARCHIVE" | awk '{print $1}')
+    elif command -v shasum >/dev/null 2>&1; then
+        ACTUAL=$(shasum -a 256 "$ARCHIVE" | awk '{print $1}')
+    else
+        error "No sha256sum or shasum found; cannot verify checksum"
+    fi
+
+    if [ "$ACTUAL" != "$EXPECTED" ]; then
+        error "Checksum mismatch for $ARCHIVE_NAME. Expected: $EXPECTED Got: $ACTUAL"
+    fi
+
+    info "Checksum verified."
+}
+
 # Download and install
 install() {
     info "Detected: $OS $ARCH"
@@ -98,12 +132,16 @@ install() {
         error "Failed to download binary"
     fi
 
+<<<<<<< HEAD
     # Verify archive contents before extraction (CWE-22 path traversal).
     # Reject any entry with an absolute path or a ".." component.
     info "Verifying archive..."
     if tar -tzf "$ARCHIVE" | grep -qE '^/|(^|/)\.\.(/|$)'; then
         error "Archive contains unsafe paths (absolute or directory traversal) — refusing to extract"
     fi
+=======
+    verify_checksum
+>>>>>>> 1d0e30d (feat: verify binary checksum after download)
 
     info "Extracting..."
     tar -xzf "$ARCHIVE" -C "$TEMP_DIR"
